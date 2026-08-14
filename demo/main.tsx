@@ -35,12 +35,9 @@ const Code = ({ children }: { children: string }) => <pre className="wl-code">{c
 const StorePanel = () => {
   const [key, setKey] = useState('waveloop.settings')
 
-  // The hook returns a positional triple: current value, a re-read, and a write.
-  const [data, get, set] = useLocoStorage<Settings>(key, DEFAULTS) as unknown as [
-    Partial<Settings> | null,
-    (key: string) => void,
-    (body: Partial<Settings>) => void
-  ]
+  // The hook returns a typed tuple: current value, a re-read of the bound key,
+  // a write, and the last storage error (null when the slot is healthy).
+  const [data, refresh, set, error] = useLocoStorage<Settings>(key, DEFAULTS)
 
   const [, forceRender] = useState(0)
   const bump = () => forceRender((n) => n + 1)
@@ -66,10 +63,10 @@ const StorePanel = () => {
         watch the default land.
       </p>
 
-      <Code>{`const [data, get, set] = useLocoStorage<Settings>('${key}', DEFAULTS)
+      <Code>{`const [data, refresh, set, error] = useLocoStorage<Settings>('${key}', DEFAULTS)
 
 set({ ...data, gain: 0.4 })   // writes JSON, updates state
-get('${key}')                 // re-reads the slot`}</Code>
+refresh()                     // re-reads '${key}'`}</Code>
 
       <div className="wl-row" style={{ marginTop: '0.75rem' }}>
         <span className="wl-silk">key</span>
@@ -90,11 +87,11 @@ get('${key}')                 // re-reads the slot`}</Code>
         <button
           className="wl-btn"
           onClick={() => {
-            get(key)
+            refresh()
             bump()
           }}
         >
-          get
+          refresh
         </button>
         <button
           className="wl-btn wl-btn--ghost"
@@ -156,6 +153,7 @@ get('${key}')                 // re-reads the slot`}</Code>
       <div className="wl-grid" style={{ marginTop: '0.75rem' }}>
         <Readout label="hook state (data)" value={JSON.stringify(data)} />
         <Readout label="raw localStorage" value={raw ?? 'null'} />
+        <Readout label="error" value={error ? error.message : 'null'} />
       </div>
 
       <div className="wl-row" style={{ marginTop: '0.75rem' }}>
@@ -187,7 +185,7 @@ const Install = () => (
 
 type Settings = { name: string; gain: number; monitor: boolean }
 
-const [data, get, set] = useLocoStorage<Settings>('key', DEFAULTS)`}</Code>
+const [data, refresh, set, error] = useLocoStorage<Settings>('key', DEFAULTS)`}</Code>
     </div>
   </Section>
 )
@@ -208,33 +206,39 @@ const Api = () => (
           <tr>
             <td>useLocoStorage</td>
             <td>hook</td>
-            <td>{'<T>(key, defaultValue) => [data, get, set]'}</td>
+            <td>{'<T>(key: string, defaultValue: T) => [data, refresh, set, error]'}</td>
             <td>Reads the key on mount and whenever it changes; writes the default when the slot is empty or unparseable.</td>
           </tr>
           <tr>
             <td>[0] data</td>
             <td>value</td>
-            <td>{'Partial<T> | null'}</td>
-            <td>The hook’s current view of the slot. Null until the first read lands.</td>
+            <td>{'T'}</td>
+            <td>The hook’s current view of the slot, read synchronously on the first render and on the first render after the key changes — no null frame, no stale frame.</td>
           </tr>
           <tr>
-            <td>[1] get</td>
+            <td>[1] refresh</td>
             <td>function</td>
-            <td>{'(key) => void'}</td>
-            <td>Re-reads a slot into state.</td>
+            <td>{'() => void'}</td>
+            <td>Re-reads the slot this hook is bound to.</td>
           </tr>
           <tr>
             <td>[2] set</td>
             <td>function</td>
-            <td>{'(body: Partial<T>) => void'}</td>
+            <td>{'(body: T) => void'}</td>
             <td>Serialises and writes, then updates state. Replaces the slot — it does not merge.</td>
+          </tr>
+          <tr>
+            <td>[3] error</td>
+            <td>value</td>
+            <td>{'Error | null'}</td>
+            <td>The last write failure (quota, blocked storage, unserialisable value), or null.</td>
           </tr>
         </tbody>
       </table>
     </div>
     <p className="wl-muted" style={{ marginTop: '0.75rem' }}>
-      Note the cast in this demo’s source: the hook’s return is inferred as a union array rather than
-      a tuple, so destructuring it needs a type assertion at the call site.
+      The return is a declared tuple, so destructuring it type-checks as written — no assertion at
+      the call site.
     </p>
   </Section>
 )
